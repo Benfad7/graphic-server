@@ -47,7 +47,7 @@ def get_valid_token():
 @app.route('/get-data')
 def get_data():
     try:
-        with open('data.json', 'r', encoding='utf-8') as f:
+        with open('../data.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
         return jsonify(data)
     except FileNotFoundError:
