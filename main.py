@@ -29,7 +29,7 @@ def check_api_connection():
 
     try:
         # Use a timeout to prevent the request from hanging indefinitely.
-        response = requests.get(url, auth=(API_USERNAME, API_PASSWORD), timeout=30)
+        response = requests.get(url, auth=(API_USERNAME, API_PASSWORD), timeout=150)
         # Raise an exception for HTTP errors (e.g., 401 Unauthorized, 404 Not Found, 500 Server Error)
         response.raise_for_status()
         print(f"✅ Successfully connected to the API! Status Code: {response.status_code}")
@@ -65,7 +65,7 @@ def get_order_details():
             auth=(API_USERNAME, API_PASSWORD),
             params=params,
             headers=HEADERS,
-            timeout=30
+            timeout=150
         )
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
         order_data = response.json()
@@ -95,7 +95,7 @@ def update_order_status(order_name, status):
             auth=(API_USERNAME, API_PASSWORD),
             headers=HEADERS,
             json=payload,
-            timeout=30
+            timeout=150
         )
 
         response.raise_for_status()
@@ -134,7 +134,7 @@ def update_order_status_and_add_attachment(order_name, status, file_base64):
             auth=(API_USERNAME, API_PASSWORD),
             headers=HEADERS,
             json=payload,
-            timeout=30
+            timeout=150
         )
         response.raise_for_status()
         print(f"✅ Successfully added attachment for '{order_name}'. Status Code: {response.status_code}")
