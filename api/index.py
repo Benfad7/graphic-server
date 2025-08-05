@@ -47,14 +47,17 @@ def get_valid_token():
 @app.route('/get-data')
 def get_data():
     try:
-        with open('../data.json', 'r', encoding='utf-8') as f:
+        # This creates a correct, reliable path to data.json
+        # It finds the directory of the current script (api/) and then goes to the parent folder
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(os.path.dirname(base_dir), 'data.json')
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return jsonify(data)
     except FileNotFoundError:
         return jsonify({"status": "error", "message": "data.json not found"}), 404
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @app.route('/run-python')
 def run_python_script():
