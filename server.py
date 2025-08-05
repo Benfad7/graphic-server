@@ -150,7 +150,7 @@ def update_status_and_attach():
     if update_order_status_and_add_attachment(order_name, status, file_base64):
         return jsonify({"status": "success", "message": "Order status updated and attachment added successfully."}), 200
     else:
-        return jsonify({"status": "error", "message": "Failed to update order status or add attachment."}), 500
+        return jsonify({"status": "error", "message": "Failed to update order status or add attachment. "}), 500
 
 
 if __name__ == '__main__':
