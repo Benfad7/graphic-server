@@ -6,9 +6,9 @@ import os
 # It's best practice to store credentials in environment variables
 # for security, rather than hardcoding them.
 # Replace with your actual values if not using environment variables.
-CLIENT_ID = "437fd0f5-5e0b-4e3d-850e-fdb89eb2b82c"
-CLIENT_SECRET = "KK78Q~WeVKVSF_hdMrZVbyXOKLJQ5RNp6OpNcaKU"
-TENANT_ID = "2862bd20-5f6e-4d9f-b63d-e015cc27febf"
+CLIENT_ID = os.environ.get("CLIENT_ID")
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+TENANT_ID = os.environ.get("TENANT_ID")
 SENDER_EMAIL = "benline@benline.co.il"
 
 

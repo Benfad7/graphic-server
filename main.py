@@ -1,9 +1,11 @@
+import os
+
 import requests
 import json
 
 PRIORITY_API_BASE_URL = "https://benline.wee.co.il/"
 API_USERNAME = "API"
-API_PASSWORD = "AD374AEF"
+API_PASSWORD = os.environ.get("API_PASSWORD")
 COMPANY_NAME = "beline"
 HEADERS = {
     'X-App-Id': 'APP008P',
