@@ -40,37 +40,11 @@ def get_valid_token():
     return access_token
 
 
-# Set up logging
-log_file = 'call_count.log'
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-handler = logging.FileHandler(log_file)
-logger.addHandler(handler)
-
-# Initialize call count
-if os.path.exists(log_file):
-    with open(log_file, 'r') as f:
-        try:
-            call_count = int(f.read().strip())
-        except ValueError:
-            call_count = 0
-else:
-    call_count = 0
 
 
-def log_call(func):
-    def wrapper(*args, **kwargs):
-        global call_count
-        call_count += 1
-        logger.info(f'The server has been called {call_count} times.')
-        return func(*args, **kwargs)
-
-    wrapper.__name__ = func.__name__
-    return wrapper
 
 
 @app.route('/get-data')
-@log_call
 def get_data():
     try:
         with open('data.json', 'r', encoding='utf-8') as f:
@@ -83,7 +57,6 @@ def get_data():
 
 
 @app.route('/run-python')
-@log_call
 def run_python_script():
     try:
         print("Running Python script")
@@ -97,7 +70,6 @@ def run_python_script():
 
 
 @app.route('/update-status', methods=['POST'])
-@log_call
 def update_status():
     data = request.get_json()
     order_name = data.get('orderName')
@@ -137,7 +109,6 @@ def update_status():
 
 
 @app.route('/update-status-and-attach', methods=['POST'])
-@log_call
 def update_status_and_attach():
     data = request.get_json()
     order_name = data.get('orderName')
