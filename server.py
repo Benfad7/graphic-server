@@ -9,10 +9,6 @@ from email_sender import get_access_token, send_approval_email
 
 app = Flask(__name__)
 
-# --- Logging Configuration ---
-# Configure logging to be able to see debu   g messages in Vercel logs
-logging.basicConfig(level=logging.INFO)
-
 CORS(app, origins="*")
 
 # --- Token Management ---
@@ -30,56 +26,46 @@ def get_valid_token():
     current_time = time.time()
 
     if not access_token or (current_time - token_creation_time) > 3000:
-        app.logger.info("Access token is expired or not available. Fetching a new one.")
+        print("Access token is expired or not available. Fetching a new one.")
         new_token = get_access_token()
         if new_token:
             access_token = new_token
             token_creation_time = current_time
             return access_token
         else:
-            app.logger.error("Failed to retrieve a new access token.")
+            print("Failed to retrieve a new access token.")
             return None
 
-    app.logger.info("Reusing existing access token.")
+    print("Reusing existing access token.")
     return access_token
+
+
+
+
 
 
 @app.route('/get-data')
 def get_data():
-    """
-    Reads data from data.json.
-    This pathing is made robust for Vercel's environment.
-    """
-    file_path = '' # Initialize to be accessible in except block
     try:
-        # In the Vercel environment, the current working directory is the project's root.
-        # This is a more reliable way to locate files than using __file__.
-        project_root = os.getcwd()
-        file_path = os.path.join(project_root, 'data.json')
-        app.logger.info(f"Attempting to read data.json from: {file_path}")
-
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open('data.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
         return jsonify(data)
     except FileNotFoundError:
-        app.logger.error(f"File not found at the specified path: {file_path}")
-        return jsonify({"status": "error", "message": f"data.json not found. Tried path: {file_path}"}), 404
+        return jsonify({"status": "error", "message": "data.json not found"}), 404
     except Exception as e:
-        app.logger.error(f"An error occurred while reading data.json: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route('/run-python')
 def run_python_script():
     try:
-        app.logger.info("Running Python script to get order details.")
+        print("Running Python script")
         data = get_order_details()
         if data:
             return jsonify(data)
         else:
-            app.logger.error("Failed to fetch order details from main.py.")
             return jsonify({"status": "error", "message": "Failed to fetch order details."}), 500
     except Exception as e:
-        app.logger.error(f"An exception occurred in /run-python: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -104,8 +90,6 @@ def update_status():
 
             token = get_valid_token()
             if not token:
-                # Still return success to the client, but log the email failure.
-                app.logger.error("Order status updated but failed to send email due to invalid token.")
                 return jsonify({"status": "success",
                                 "message": "Order status updated but failed to send email due to invalid token."}), 200
 
@@ -113,14 +97,11 @@ def update_status():
                                              customer_name=customer_name)
             if not email_sent:
                 # Retry once with a new token
-                app.logger.info("Initial email send failed. Retrying with a new token.")
                 global access_token
-                access_token = None # Force a refresh
+                access_token = None
                 token = get_valid_token()
                 if token:
                     send_approval_email(token, order_name, recipient_email, review_link, customer_name=customer_name)
-                else:
-                    app.logger.error("Failed to send email on retry, no valid token.")
 
         return jsonify({"status": "success", "message": "Order status updated successfully."}), 200
     else:
@@ -140,5 +121,8 @@ def update_status_and_attach():
     if update_order_status_and_add_attachment(order_name, status, file_base64):
         return jsonify({"status": "success", "message": "Order status updated and attachment added successfully."}), 200
     else:
-        return jsonify({"status": "error", "message": "Failed to update order status or add attachment."}), 500
+        return jsonify({"status": "error", "message": "Failed to update order status or add attachment. "}), 500
 
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', debug=True, port=5001, ssl_context='adhoc')
