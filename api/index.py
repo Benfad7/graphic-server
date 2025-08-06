@@ -42,15 +42,12 @@ def get_valid_token():
 
 
 
-
-
 @app.route('/get-data')
 def get_data():
     try:
-        # This creates a correct, reliable path to data.json
-        # It finds the directory of the current script (api/) and then goes to the parent folder
+        # This path correctly navigates from 'api/' up to the root and then to 'data.json'
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(os.path.dirname(base_dir), 'data.json')
+        file_path = os.path.join(base_dir, '..', 'data.json') # <-- Add '..'
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return jsonify(data)
@@ -126,6 +123,3 @@ def update_status_and_attach():
     else:
         return jsonify({"status": "error", "message": "Failed to update order status or add attachment. "}), 500
 
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True, port=5001, ssl_context='adhoc')
