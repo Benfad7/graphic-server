@@ -142,6 +142,3 @@ def update_status_and_attach():
     else:
         return jsonify({"status": "error", "message": "Failed to update order status or add attachment."}), 500
 
-# This is for local development testing
-if __name__ == '__main__':
-    app.run(debug=True)

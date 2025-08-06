@@ -1,0 +1,11 @@
+# In your-project/netlify.toml
+
+[build]
+  command = "pip install -r requirements.txt"
+  functions = "netlify/functions"
+  publish = "src" # We need to publish the src dir to include data.json
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
