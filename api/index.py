@@ -10,7 +10,7 @@ from email_sender import get_access_token, send_approval_email
 app = Flask(__name__)
 
 # --- Logging Configuration ---
-# Configure logging to be able to see debug messages in Vercel logs
+# Configure logging to be able to see debu   g messages in Vercel logs
 logging.basicConfig(level=logging.INFO)
 
 CORS(app, origins="*")
