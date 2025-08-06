@@ -18,7 +18,7 @@ token_creation_time = 0
 
 def get_valid_token():
     """
-    Returns a valid access token, refreshing it if it's expired or doesn't exist.
+    Returns a valid access token, refreshing it if it's expired or doesn  't exist.
     Tokens from Microsoft Graph are typically valid for 1 hour (3600 seconds).
     We'll refresh it after 50 minutes (3000 seconds) to be safe.
     """
