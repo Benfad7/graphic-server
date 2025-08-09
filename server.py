@@ -6,6 +6,15 @@ import logging
 import os
 import time
 from email_sender import get_access_token, send_approval_email
+import requests
+from typing import Optional
+
+try:
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+except Exception:
+    boto3 = None
+    BotoCoreError = ClientError = Exception
 
 app = Flask(__name__)
 
@@ -40,18 +49,97 @@ def get_valid_token():
     return access_token
 
 
+###############################
+# Cloudflare R2 configuration #
+###############################
+
+R2_ACCOUNT_ID = "944539d199bcd56d08fd20e2920753c9"
+R2_ACCESS_KEY_ID = "869cd104efd961706ce96b5d051388b3"
+R2_SECRET_ACCESS_KEY = "5ff7e1df459b90aba30e39fd91e04a01b0573014dd224e79036f197fbdf21fcd"
+R2_BUCKET_NAME = "graphic"
+R2_OBJECT_KEY = os.environ.get("R2_OBJECT_KEY", "data.json")
+# Public base URL to read from. Fallback to the value provided by the user
+R2_PUBLIC_BASE_URL = os.environ.get(
+    "R2_PUBLIC_BASE_URL",
+    "https://944539d199bcd56d08fd20e2920753c9.r2.cloudflarestorage.com",
+)
+
+_s3_client = None
+if boto3 and R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME:
+    try:
+        _s3_client = boto3.client(
+            "s3",
+            endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+            aws_access_key_id=R2_ACCESS_KEY_ID,
+            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+            region_name="auto",
+        )
+    except Exception as e:
+        print(f"Failed to initialize R2 S3 client: {e}")
 
 
+def _compose_public_object_url() -> str:
+    base = R2_PUBLIC_BASE_URL.rstrip("/")
+    if R2_BUCKET_NAME and f"/{R2_BUCKET_NAME}" not in base:
+        return f"{base}/{R2_BUCKET_NAME}/{R2_OBJECT_KEY}"
+    return f"{base}/{R2_OBJECT_KEY}"
+
+
+def download_json_from_r2() -> Optional[dict]:
+    """Try downloading via S3 API if configured; otherwise use public HTTP URL."""
+    # Prefer authenticated S3 API (does not require public object)
+    if _s3_client:
+        try:
+            obj = _s3_client.get_object(Bucket=R2_BUCKET_NAME, Key=R2_OBJECT_KEY)
+            body_bytes = obj["Body"].read()
+            return json.loads(body_bytes.decode("utf-8"))
+        except (BotoCoreError, ClientError, Exception) as e:
+            print(f"Failed to download JSON from R2 via S3 API: {e}")
+            # fall through to public HTTP
+
+    # Fallback to public HTTP if available
+    try:
+        url = _compose_public_object_url()
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"Failed to download JSON from R2 public URL: {e}")
+        return None
+
+
+def upload_json_to_r2(data: dict) -> bool:
+    if not _s3_client:
+        print("R2 S3 client not configured. Skipping upload.")
+        return False
+    try:
+        body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        _s3_client.put_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=R2_OBJECT_KEY,
+            Body=body,
+            ContentType="application/json; charset=utf-8",
+            CacheControl="no-cache",
+        )
+        print(f"✅ Uploaded JSON to R2 bucket='{R2_BUCKET_NAME}' key='{R2_OBJECT_KEY}'")
+        return True
+    except (BotoCoreError, ClientError) as e:
+        print(f"❌ Failed to upload JSON to R2: {e}")
+        return False
 
 
 @app.route('/get-data')
 def get_data():
     try:
+        data = download_json_from_r2()
+        if data is not None:
+            return jsonify(data)
+
         with open('data.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return jsonify(data)
+            local_data = json.load(f)
+        return jsonify(local_data)
     except FileNotFoundError:
-        return jsonify({"status": "error", "message": "data.json not found"}), 404
+        return jsonify({"status": "error", "message": "data.json not found and R2 unavailable"}), 404
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -62,6 +150,7 @@ def run_python_script():
         print("Running Python script")
         data = get_order_details()
         if data:
+            upload_json_to_r2(data)
             return jsonify(data)
         else:
             return jsonify({"status": "error", "message": "Failed to fetch order details."}), 500
