@@ -59,10 +59,7 @@ R2_SECRET_ACCESS_KEY = os.environ['R2_SECRET_ACCESS_KEY']
 R2_BUCKET_NAME = "graphic"
 R2_OBJECT_KEY = "data.json"
 # Public base URL to read from. Fallback to the value provided by the user
-R2_PUBLIC_BASE_URL = os.environ.get(
-    "R2_PUBLIC_BASE_URL",
-    "https://944539d199bcd56d08fd20e2920753c9.r2.cloudflarestorage.com",
-)
+R2_PUBLIC_BASE_URL = "https://944539d199bcd56d08fd20e2920753c9.r2.cloudflarestorage.com"
 
 _s3_client = None
 if boto3 and R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME:
