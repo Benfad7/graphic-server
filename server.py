@@ -53,13 +53,16 @@ def get_valid_token():
 # Cloudflare R2 configuration #
 ###############################
 
-R2_ACCOUNT_ID = os.environ['R2_ACCOUNT_ID']
-R2_ACCESS_KEY_ID = os.environ['R2_ACCESS_KEY_ID']
-R2_SECRET_ACCESS_KEY = os.environ['R2_SECRET_ACCESS_KEY']
+R2_ACCOUNT_ID = "944539d199bcd56d08fd20e2920753c9"
+R2_ACCESS_KEY_ID = "869cd104efd961706ce96b5d051388b3"
+R2_SECRET_ACCESS_KEY = "5ff7e1df459b90aba30e39fd91e04a01b0573014dd224e79036f197fbdf21fcd"
 R2_BUCKET_NAME = "graphic"
-R2_OBJECT_KEY = "data.json"
+R2_OBJECT_KEY = os.environ.get("R2_OBJECT_KEY", "data.json")
 # Public base URL to read from. Fallback to the value provided by the user
-R2_PUBLIC_BASE_URL = "https://944539d199bcd56d08fd20e2920753c9.r2.cloudflarestorage.com"
+R2_PUBLIC_BASE_URL = os.environ.get(
+    "R2_PUBLIC_BASE_URL",
+    "https://944539d199bcd56d08fd20e2920753c9.r2.cloudflarestorage.com",
+)
 
 _s3_client = None
 if boto3 and R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME:
@@ -131,8 +134,10 @@ def get_data():
         data = download_json_from_r2()
         if data is not None:
             return jsonify(data)
-        else:
-            return jsonify({"status": "error", "message": "Failed to fetch data from R2."}), 500
+
+        with open('data.json', 'r', encoding='utf-8') as f:
+            local_data = json.load(f)
+        return jsonify(local_data)
     except FileNotFoundError:
         return jsonify({"status": "error", "message": "data.json not found and R2 unavailable"}), 404
     except Exception as e:
@@ -165,27 +170,34 @@ def update_status():
     if update_order_status(order_name, status):
         # If the status is for graphic approval, send an email
         if status == '4לאשור גרפיק':
+            send_email_flag = data.get('sendEmail', True)
+            if not isinstance(send_email_flag, bool):
+                # Be defensive; treat truthy/falsy
+                send_email_flag = bool(send_email_flag)
+
             recipient_email = data.get('email')
             customer_name = data.get('name')
             review_link = data.get('reviewLink')
 
-            if not all([recipient_email, review_link]):
-                return jsonify({"status": "error", "message": "Missing email or reviewLink for sending email"}), 400
+            if send_email_flag:
+                if not all([recipient_email, review_link]):
+                    return jsonify({"status": "error", "message": "Missing email or reviewLink for sending email"}), 400
 
-            token = get_valid_token()
-            if not token:
-                return jsonify({"status": "success",
-                                "message": "Order status updated but failed to send email due to invalid token."}), 200
-
-            email_sent = send_approval_email(token, order_name, recipient_email, review_link,
-                                             customer_name=customer_name)
-            if not email_sent:
-                # Retry once with a new token
-                global access_token
-                access_token = None
                 token = get_valid_token()
-                if token:
-                    send_approval_email(token, order_name, recipient_email, review_link, customer_name=customer_name)
+                if not token:
+                    return jsonify({"status": "success",
+                                    "message": "Order status updated but failed to send email due to invalid token."}), 200
+
+                email_sent = send_approval_email(token, order_name, recipient_email, review_link,
+                                                 customer_name=customer_name)
+                if not email_sent:
+                    # Retry once with a new token
+                    global access_token
+                    access_token = None
+                    token = get_valid_token()
+                    if token:
+                        send_approval_email(token, order_name, recipient_email, review_link,
+                                            customer_name=customer_name)
 
         return jsonify({"status": "success", "message": "Order status updated successfully."}), 200
     else:
