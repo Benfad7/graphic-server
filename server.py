@@ -191,6 +191,8 @@ def get_object_proxy():
     if not _s3_client:
         return jsonify({"status": "error", "message": "R2 client not configured"}), 500
     key = request.args.get('key')
+    if key:
+        key = unquote(key)
     url_param = request.args.get('url')
     if not key and url_param:
         # derive key from url
