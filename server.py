@@ -2,6 +2,7 @@ import json
 from flask import Flask, jsonify, request
 from main import get_order_details, update_order_status, update_order_status_and_add_attachment
 from flask_cors import CORS
+from flask import make_response
 import logging
 import os
 import time
@@ -180,6 +181,29 @@ def delete_object():
             return jsonify({"status": "error", "message": "Missing key"}), 400
         _s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
         return jsonify({"status": "success"})
+    except (BotoCoreError, ClientError) as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/r2/get', methods=['GET'])
+def get_object_proxy():
+    if not _s3_client:
+        return jsonify({"status": "error", "message": "R2 client not configured"}), 500
+    key = request.args.get('key')
+    if not key:
+        return jsonify({"status": "error", "message": "Missing key"}), 400
+    disposition = request.args.get('disposition', 'inline')
+    try:
+        obj = _s3_client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+        body = obj['Body'].read()
+        content_type = obj.get('ContentType', 'application/octet-stream')
+        resp = make_response(body)
+        resp.headers['Content-Type'] = content_type
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        if disposition in ('inline', 'attachment'):
+            # Let browser decide filename if not provided
+            resp.headers['Content-Disposition'] = f"{disposition}"
+        return resp
     except (BotoCoreError, ClientError) as e:
         return jsonify({"status": "error", "message": str(e)}), 500
     try:
