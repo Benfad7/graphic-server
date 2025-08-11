@@ -69,8 +69,9 @@ def get_order_details():
         )
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
         order_data = response.json()
-        print(f"✅ Successfully fetched data and saved to '{'data.json'}'")
-        return response
+        # Return data only; do not save to local file
+        print("✅ Successfully fetched data from Priority API")
+        return order_data
 
     except requests.exceptions.RequestException as e:
         print(f"❌ API Request Failed: {e}")

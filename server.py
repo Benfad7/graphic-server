@@ -7,6 +7,7 @@ import os
 import time
 from email_sender import get_access_token, send_approval_email
 import requests
+from urllib.parse import urlparse
 from typing import Optional
 
 try:
@@ -85,6 +86,13 @@ def _compose_public_object_url() -> str:
     return f"{base}/{R2_OBJECT_KEY}"
 
 
+def compose_public_url_for_key(object_key: str) -> str:
+    base = R2_PUBLIC_BASE_URL.rstrip("/")
+    if R2_BUCKET_NAME and f"/{R2_BUCKET_NAME}" not in base:
+        return f"{base}/{R2_BUCKET_NAME}/{object_key}"
+    return f"{base}/{object_key}"
+
+
 def download_json_from_r2() -> Optional[dict]:
     """Try downloading via S3 API if configured; otherwise use public HTTP URL."""
     # Prefer authenticated S3 API (does not require public object)
@@ -112,6 +120,65 @@ def upload_json_to_r2(data: dict) -> bool:
     if not _s3_client:
         print("R2 S3 client not configured. Skipping upload.")
         return False
+
+
+@app.route('/r2/presign-upload', methods=['POST'])
+def presign_upload():
+    if not _s3_client:
+        return jsonify({"status": "error", "message": "R2 client not configured"}), 500
+    try:
+        body = request.get_json(force=True)
+        filename = body.get('filename') or 'file'
+        content_type = body.get('contentType') or 'application/octet-stream'
+        order_id = body.get('orderId') or 'misc'
+        folder = body.get('folder') or 'orders'
+        # Generate an object key: e.g., orders/<orderId>/<ts>_<filename>
+        ts = str(int(time.time() * 1000))
+        safe_name = filename.replace('\\', '/').split('/')[-1]
+        object_key = f"{folder}/{order_id}/{ts}_{safe_name}"
+
+        params = {
+            'Bucket': R2_BUCKET_NAME,
+            'Key': object_key,
+            'ContentType': content_type,
+        }
+        url = _s3_client.generate_presigned_url(
+            ClientMethod='put_object',
+            Params=params,
+            ExpiresIn=3600
+        )
+        public_url = compose_public_url_for_key(object_key)
+        return jsonify({
+            'uploadUrl': url,
+            'key': object_key,
+            'publicUrl': public_url,
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/r2/delete', methods=['POST'])
+def delete_object():
+    if not _s3_client:
+        return jsonify({"status": "error", "message": "R2 client not configured"}), 500
+    try:
+        body = request.get_json(force=True)
+        key = body.get('key')
+        if not key:
+            # Try derive key from publicUrl
+            public_url = body.get('publicUrl')
+            if public_url:
+                # Expect key after bucket in URL path
+                path = urlparse(public_url).path
+                # Remove leading '/bucket/'
+                if path.startswith(f"/{R2_BUCKET_NAME}/"):
+                    key = path[len(R2_BUCKET_NAME) + 2:]
+        if not key:
+            return jsonify({"status": "error", "message": "Missing key"}), 400
+        _s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+        return jsonify({"status": "success"})
+    except (BotoCoreError, ClientError) as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
     try:
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         _s3_client.put_object(
@@ -150,7 +217,7 @@ def run_python_script():
         print("Running Python script")
         data = get_order_details()
         if data:
-            upload_json_to_r2(data)
+            # Return the data without saving it server-side
             return jsonify(data)
         else:
             return jsonify({"status": "error", "message": "Failed to fetch order details."}), 500
