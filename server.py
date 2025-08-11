@@ -7,7 +7,7 @@ import os
 import time
 from email_sender import get_access_token, send_approval_email
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote, unquote
 from typing import Optional
 
 try:
@@ -88,9 +88,11 @@ def _compose_public_object_url() -> str:
 
 def compose_public_url_for_key(object_key: str) -> str:
     base = R2_PUBLIC_BASE_URL.rstrip("/")
+    # URL-encode each path segment to avoid invalid URLs (spaces, unicode, etc.)
+    encoded_key = "/".join(quote(seg, safe="-_.~") for seg in object_key.split("/"))
     if R2_BUCKET_NAME and f"/{R2_BUCKET_NAME}" not in base:
-        return f"{base}/{R2_BUCKET_NAME}/{object_key}"
-    return f"{base}/{object_key}"
+        return f"{base}/{R2_BUCKET_NAME}/{encoded_key}"
+    return f"{base}/{encoded_key}"
 
 
 def download_json_from_r2() -> Optional[dict]:
@@ -170,9 +172,10 @@ def delete_object():
             if public_url:
                 # Expect key after bucket in URL path
                 path = urlparse(public_url).path
-                # Remove leading '/bucket/'
+                # Remove leading '/bucket/' and decode percent-encoding
                 if path.startswith(f"/{R2_BUCKET_NAME}/"):
-                    key = path[len(R2_BUCKET_NAME) + 2:]
+                    key_enc = path[len(R2_BUCKET_NAME) + 2:]
+                    key = unquote(key_enc)
         if not key:
             return jsonify({"status": "error", "message": "Missing key"}), 400
         _s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
