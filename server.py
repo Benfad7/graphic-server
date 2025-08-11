@@ -8,7 +8,6 @@ import time
 from email_sender import get_access_token, send_approval_email
 import requests
 from typing import Optional
-import json
 
 try:
     import boto3
@@ -129,8 +128,7 @@ def upload_json_to_r2(data: dict) -> bool:
 @app.route('/get-data')
 def get_data():
     try:
-        response = download_json_from_r2()
-        data = response.json()
+        data = download_json_from_r2()
         if data is not None:
             return jsonify(data)
         else:
@@ -148,7 +146,6 @@ def run_python_script():
         data = get_order_details()
         if data:
             upload_json_to_r2(data)
-            data = data.json()
             return jsonify(data)
         else:
             return jsonify({"status": "error", "message": "Failed to fetch order details."}), 500

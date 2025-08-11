@@ -68,6 +68,7 @@ def get_order_details():
             timeout=150
         )
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        order_data = response.json()
         print(f"✅ Successfully fetched data and saved to '{'data.json'}'")
         return response
 
