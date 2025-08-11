@@ -1,4 +1,5 @@
 import json
+import base64
 from flask import Flask, jsonify, request
 from main import get_order_details, update_order_status, update_order_status_and_add_attachment
 from flask_cors import CORS
@@ -144,9 +145,7 @@ def presign_upload():
             'Bucket': R2_BUCKET_NAME,
             'Key': object_key,
             'ContentType': content_type,
-            'ACL': 'private',
         }
-        # include explicit headers in signature to avoid 400s due to header mismatch
         url = _s3_client.generate_presigned_url(
             ClientMethod='put_object',
             Params=params,
@@ -192,6 +191,12 @@ def get_object_proxy():
     if not _s3_client:
         return jsonify({"status": "error", "message": "R2 client not configured"}), 500
     key = request.args.get('key')
+    url_param = request.args.get('url')
+    if not key and url_param:
+        # derive key from url
+        path = urlparse(url_param).path
+        if path.startswith(f"/{R2_BUCKET_NAME}/"):
+            key = unquote(path[len(R2_BUCKET_NAME) + 2:])
     if not key:
         return jsonify({"status": "error", "message": "Missing key"}), 400
     disposition = request.args.get('disposition', 'inline')
@@ -207,6 +212,40 @@ def get_object_proxy():
             resp.headers['Content-Disposition'] = f"{disposition}"
         return resp
     except (BotoCoreError, ClientError) as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/r2/upload', methods=['POST'])
+def upload_via_server():
+    if not _s3_client:
+        return jsonify({"status": "error", "message": "R2 client not configured"}), 500
+    try:
+        body = request.get_json(force=True)
+        data_url = body.get('dataUrl')
+        filename = body.get('filename') or 'file'
+        content_type = body.get('contentType') or 'application/octet-stream'
+        order_id = body.get('orderId') or 'misc'
+        folder = body.get('folder') or 'uploads'
+        if not data_url or 'base64,' not in data_url:
+            return jsonify({"status": "error", "message": "Invalid dataUrl"}), 400
+        ts = str(int(time.time() * 1000))
+        safe_name = filename.replace('\\', '/').split('/')[-1]
+        object_key = f"{folder}/{order_id}/{ts}_{safe_name}"
+
+        base64_part = data_url.split('base64,', 1)[1]
+        data_bytes = base64.b64decode(base64_part)
+
+        _s3_client.put_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=object_key,
+            Body=data_bytes,
+            ContentType=content_type,
+        )
+        return jsonify({
+            'key': object_key,
+            'publicUrl': compose_public_url_for_key(object_key)
+        })
+    except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
     try:
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
