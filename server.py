@@ -144,11 +144,13 @@ def presign_upload():
             'Bucket': R2_BUCKET_NAME,
             'Key': object_key,
             'ContentType': content_type,
+            'ACL': 'private',
         }
+        # include explicit headers in signature to avoid 400s due to header mismatch
         url = _s3_client.generate_presigned_url(
             ClientMethod='put_object',
             Params=params,
-            ExpiresIn=3600
+            ExpiresIn=3600,
         )
         public_url = compose_public_url_for_key(object_key)
         return jsonify({
