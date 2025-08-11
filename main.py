@@ -68,11 +68,8 @@ def get_order_details():
             timeout=150
         )
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        order_data = response.json()
-        with open('data.json', 'w', encoding='utf-8') as f:
-            json.dump(order_data, f, ensure_ascii=False, indent=4)
         print(f"✅ Successfully fetched data and saved to '{'data.json'}'")
-        return order_data
+        return response
 
     except requests.exceptions.RequestException as e:
         print(f"❌ API Request Failed: {e}")
