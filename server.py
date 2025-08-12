@@ -81,11 +81,6 @@ if boto3 and R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_
         print(f"Failed to initialize R2 S3 client: {e}")
 
 
-def _compose_public_object_url() -> str:
-    base = R2_PUBLIC_BASE_URL.rstrip("/")
-    if R2_BUCKET_NAME and f"/{R2_BUCKET_NAME}" not in base:
-        return f"{base}/{R2_BUCKET_NAME}/{R2_OBJECT_KEY}"
-    return f"{base}/{R2_OBJECT_KEY}"
 
 
 def compose_public_url_for_key(object_key: str) -> str:
@@ -96,28 +91,6 @@ def compose_public_url_for_key(object_key: str) -> str:
         return f"{base}/{R2_BUCKET_NAME}/{encoded_key}"
     return f"{base}/{encoded_key}"
 
-
-def download_json_from_r2() -> Optional[dict]:
-    """Try downloading via S3 API if configured; otherwise use public HTTP URL."""
-    # Prefer authenticated S3 API (does not require public object)
-    if _s3_client:
-        try:
-            obj = _s3_client.get_object(Bucket=R2_BUCKET_NAME, Key=R2_OBJECT_KEY)
-            body_bytes = obj["Body"].read()
-            return json.loads(body_bytes.decode("utf-8"))
-        except (BotoCoreError, ClientError, Exception) as e:
-            print(f"Failed to download JSON from R2 via S3 API: {e}")
-            # fall through to public HTTP
-
-    # Fallback to public HTTP if available
-    try:
-        url = _compose_public_object_url()
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        print(f"Failed to download JSON from R2 public URL: {e}")
-        return None
 
 
 def upload_json_to_r2(data: dict) -> bool:
@@ -264,21 +237,6 @@ def upload_via_server():
         print(f"❌ Failed to upload JSON to R2: {e}")
         return False
 
-
-@app.route('/get-data')
-def get_data():
-    try:
-        data = download_json_from_r2()
-        if data is not None:
-            return jsonify(data)
-
-        with open('data.json', 'r', encoding='utf-8') as f:
-            local_data = json.load(f)
-        return jsonify(local_data)
-    except FileNotFoundError:
-        return jsonify({"status": "error", "message": "data.json not found and R2 unavailable"}), 404
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/run-python')
