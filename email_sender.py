@@ -9,7 +9,7 @@ import os
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 TENANT_ID = os.environ.get("TENANT_ID")
-SENDER_EMAIL = "benline@benline.co.il"
+SENDER_EMAIL = "graphic@benline.co.il"
 
 
 def get_access_token():
