@@ -271,13 +271,43 @@ def update_status():
                 send_email_flag = bool(send_email_flag)
 
             recipient_email = data.get('email')
+            recipient_phone_number = data.get('phoneNumber')
             customer_name = data.get('name')
             review_link = data.get('reviewLink')
 
             if send_email_flag:
-                if not all([recipient_email, review_link]):
+                if not all([recipient_email, review_link, recipient_phone_number]):
                     return jsonify({"status": "error", "message": "Missing email or reviewLink for sending email"}), 400
-
+                #send messages to inforu
+                url = 'https://cloud.inforu.co.il/api/Automation/Trigger'
+                payload = {
+                    "User": {
+                        "Username": "benline",  
+                        "Token": "1494a516-220b-4580-a863-b5d437e8014b"
+                    },
+                    "Data": {
+                        "ApiEventName": "graphics",
+                        "Contacts": [
+                            {
+                                "link": review_link,
+                                "name": customer_name,
+                                "order": order_name,
+                                "PhoneNumber": recipient_phone_number,
+                            }
+                        ]
+                    }
+                }
+                try:
+                    response = requests.post(url, json=payload, timeout=50)
+                    if response.status_code == 200:
+                        print("messages sent successfully")
+                    else:
+                        print(f"Error! Status code: {response.status_code}")
+                        print("Response text:")
+                        print(response.text)
+                except requests.exceptions.RequestException as e:
+                    print(f"An error occurred: {e}")
+                #send an email to the customer
                 token = get_valid_token()
                 if not token:
                     return jsonify({"status": "success",
