@@ -297,9 +297,11 @@ def update_status():
                         ]
                     }
                 }
-                print(payload)
+                payload_json_str = json.dumps(payload, ensure_ascii=False)
+                print(payload_json_str)
                 try:
-                    response = requests.post(url, json=payload, timeout=50)
+                    headers = {'Content-Type': 'application/json; charset=utf-8'}
+                    response = requests.post(url, data=payload_json_str.encode('utf-8'), headers=headers, timeout=50)
                     if response.status_code == 200:
                         print("messages sent successfully")
                     else:
