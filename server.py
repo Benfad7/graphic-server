@@ -289,9 +289,9 @@ def update_status():
                         "ApiEventName": "graphics",
                         "Contacts": [
                             {
-                                "link": review_link,
-                                "name": customer_name,
-                                "order": order_name,
+                                "link": str(review_link),
+                                "name": str(customer_name),
+                                "order": str(order_name),
                                 "PhoneNumber": recipient_phone_number,
                             }
                         ]
