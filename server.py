@@ -66,7 +66,7 @@ R2_PUBLIC_BASE_URL = os.environ.get(
     "R2_PUBLIC_BASE_URL",
     "https://944539d199bcd56d08fd20e2920753c9.r2.cloudflarestorage.com",
 )
-
+INFORU_TOKEN = os.environ.get("INFORU_TOKEN")
 _s3_client = None
 if boto3 and R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME:
     try:
@@ -283,7 +283,7 @@ def update_status():
                 payload = {
                     "User": {
                         "Username": "benline",  
-                        "Token": "1494a516-220b-4580-a863-b5d437e8014b"
+                        "Token": INFORU_TOKEN
                     },
                     "Data": {
                         "ApiEventName": "graphics",
