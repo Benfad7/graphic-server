@@ -297,6 +297,7 @@ def update_status():
                         ]
                     }
                 }
+                print(payload)
                 try:
                     response = requests.post(url, json=payload, timeout=50)
                     if response.status_code == 200:
