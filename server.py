@@ -10,7 +10,7 @@ import time
 from email_sender import get_access_token, send_approval_email
 import requests
 from urllib.parse import urlparse, quote, unquote
-from typing import Optional
+from typing import Optional, List
 
 try:
     import boto3
@@ -272,65 +272,134 @@ def update_status():
 
             recipient_email = data.get('email')
             recipient_phone_number = data.get('phoneNumber')
+            secondary_email = data.get('secondaryEmail')
+            secondary_phone_number = data.get('secondaryPhoneNumber')
             customer_name = data.get('name')
             review_link = data.get('reviewLink')
-
             if send_email_flag:
-                if not all([recipient_email, review_link, recipient_phone_number]):
-                    return jsonify({"status": "error", "message": "Missing email or reviewLink for sending email"}), 400
-                #send messages to inforu
-            
-                url = 'https://cloud.inforu.co.il/api/Automation/Trigger'
-                payload = {
-                    "User": {
-                        "Username": "benline",  
-                        "Token": INFORU_TOKEN
-                    },
-                    "Data": {
-                        "ApiEventName": "benfad",
-                        "Contacts": [
-                            {
-                                "name": str(customer_name),
-                                "order": str(order_name),
-                                "link": str(review_link),
-                                "PhoneNumber": recipient_phone_number,
-                            }
-                        ]
-                    }
-                }
-                payload_json_str = json.dumps(payload, ensure_ascii=False)
-                try:
-                    headers = {'Content-Type': 'application/json; charset=utf-8'}
-                    response = requests.post(url, data=payload_json_str.encode('utf-8'), headers=headers, timeout=50)
-                    if response.status_code == 200:
-                        print("messages sent successfully")
-                    else:
-                        print(f"Error! Status code: {response.status_code}")
-                        print("Response text:")
-                        print(response.text)
-                except requests.exceptions.RequestException as e:
-                    print(f"An error occurred: {e}")
-                #send an email to the customer
-                token = get_valid_token()
-                if not token:
-                    return jsonify({"status": "success",
-                                    "message": "Order status updated but failed to send email due to invalid token."}), 200
+                # Collect multiple contacts if provided
+                emails = []
+                phones = []
+                if recipient_email:
+                    emails.append(recipient_email)
+                if secondary_email:
+                    emails.append(secondary_email)
+                if recipient_phone_number:
+                    phones.append(recipient_phone_number)
+                if secondary_phone_number:
+                    phones.append(secondary_phone_number)
+                # Dedupe & filter empties
+                emails = [e for e in {e for e in emails if e}]
+                phones = [p for p in {p for p in phones if p}]
 
-                email_sent = send_approval_email(token, order_name, recipient_email, review_link,
-                                                 customer_name=customer_name)
-                if not email_sent:
-                    # Retry once with a new token
-                    global access_token
-                    access_token = None
+                # Send messages to all phones via Inforu (separate request per phone)
+                if phones:
+                    url = 'https://cloud.inforu.co.il/api/Automation/Trigger'
+                    headers = {'Content-Type': 'application/json; charset=utf-8'}
+                    for phone in phones:
+                        try:
+                            payload = {
+                                "User": {"Username": "benline", "Token": INFORU_TOKEN},
+                                "Data": {
+                                    "ApiEventName": "benfad",
+                                    "Contacts": [{
+                                        "name": str(customer_name),
+                                        "order": str(order_name),
+                                        "link": str(review_link),
+                                        "PhoneNumber": phone,
+                                    }]
+                                }
+                            }
+                            payload_json_str = json.dumps(payload, ensure_ascii=False)
+                            response = requests.post(url, data=payload_json_str.encode('utf-8'), headers=headers, timeout=50)
+                            if response.status_code != 200:
+                                print(f"Inforu error: {response.status_code} -> {response.text}")
+                        except requests.exceptions.RequestException as e:
+                            print(f"Inforu request error: {e}")
+
+                # Send approval email to all emails
+                if emails:
                     token = get_valid_token()
                     if token:
-                        send_approval_email(token, order_name, recipient_email, review_link,
-                                            customer_name=customer_name)
+                        for addr in emails:
+                            ok = False
+                            try:
+                                ok = send_approval_email(token, order_name, addr, review_link, customer_name=customer_name)
+                            except Exception as e:
+                                print(f"Email send failed for {addr}: {e}")
+                            if not ok:
+                                # Retry once with refreshed token
+                                global access_token
+                                access_token = None
+                                token = get_valid_token()
+                                if token:
+                                    try:
+                                        send_approval_email(token, order_name, addr, review_link, customer_name=customer_name)
+                                    except Exception as e:
+                                        print(f"Retry email send failed for {addr}: {e}")
 
         return jsonify({"status": "success", "message": "Order status updated successfully."}), 200
     else:
         return jsonify({"status": "error", "message": "Failed to update order status."}), 500
 
+
+@app.route('/notify-specific', methods=['POST'])
+def notify_specific():
+    """
+    Send approval notifications ONLY to the provided contacts, without changing status.
+    Accepts:
+      orderName: str (required)
+      name: str (optional)
+      reviewLink: str (required)
+      emails: list[str] (optional)
+      phones: list[str] (optional) - already normalized to international preferred if needed
+    """
+    body = request.get_json(force=True) or {}
+    order_name = body.get('orderName')
+    review_link = body.get('reviewLink')
+    customer_name = body.get('name') or "הלקוח"
+    emails: List[str] = body.get('emails') or []
+    phones: List[str] = body.get('phones') or []
+
+    if not order_name or not review_link:
+        return jsonify({"status": "error", "message": "Missing orderName or reviewLink"}), 400
+
+    # Send SMS/WhatsApp via Inforu for each phone
+    if phones:
+        url = 'https://cloud.inforu.co.il/api/Automation/Trigger'
+        headers = {'Content-Type': 'application/json; charset=utf-8'}
+        for p in [p for p in phones if p]:
+            try:
+                payload = {
+                    "User": {"Username": "benline", "Token": INFORU_TOKEN},
+                    "Data": {
+                        "ApiEventName": "benfad",
+                        "Contacts": [{
+                            "name": str(customer_name),
+                            "order": str(order_name),
+                            "link": str(review_link),
+                            "PhoneNumber": p,
+                        }]
+                    }
+                }
+                payload_json_str = json.dumps(payload, ensure_ascii=False)
+                response = requests.post(url, data=payload_json_str.encode('utf-8'), headers=headers, timeout=50)
+                if response.status_code != 200:
+                    print(f"Inforu error: {response.status_code} -> {response.text}")
+            except requests.exceptions.RequestException as e:
+                print(f"Inforu request error: {e}")
+
+    # Send emails via Graph for each email
+    if emails:
+        token = get_valid_token()
+        if token:
+            for addr in emails:
+                try:
+                    send_approval_email(token, order_name, addr, review_link, customer_name=customer_name)
+                except Exception as e:
+                    print(f"Email send failed for {addr}: {e}")
+
+    return jsonify({"status": "success"})
 
 @app.route('/update-status-and-attach', methods=['POST'])
 def update_status_and_attach():
