@@ -279,6 +279,8 @@ def update_status():
                 if not all([recipient_email, review_link, recipient_phone_number]):
                     return jsonify({"status": "error", "message": "Missing email or reviewLink for sending email"}), 400
                 #send messages to inforu
+                #/
+                """
                 url = 'https://cloud.inforu.co.il/api/Automation/Trigger'
                 payload = {
                     "User": {
@@ -310,6 +312,7 @@ def update_status():
                         print(response.text)
                 except requests.exceptions.RequestException as e:
                     print(f"An error occurred: {e}")
+                """
                 #send an email to the customer
                 token = get_valid_token()
                 if not token:
